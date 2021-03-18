@@ -197,6 +197,15 @@ func (m *MessageRouter) PublishConnectionStatus() error {
 func (m *MessageRouter) SubscribeAndRoute() error {
 	var err error
 
+	err = m.subscribeData(func(_ mqtt.Client, msg mqtt.Message) {
+		m.logger.Debugf("subscribeDataMsgHandler(%v)", msg.MessageID())
+
+		m.handleDataMessage(msg.Payload())
+	})
+	if err != nil {
+		return err
+	}
+
 	err = m.subscribeControl(func(_ mqtt.Client, msg mqtt.Message) {
 		m.logger.Debugf("subscribeControlMsgHandler(%v)", msg.MessageID())
 
@@ -244,15 +253,6 @@ func (m *MessageRouter) SubscribeAndRoute() error {
 				}
 			}()
 		}
-	})
-	if err != nil {
-		return err
-	}
-
-	err = m.subscribeData(func(_ mqtt.Client, msg mqtt.Message) {
-		m.logger.Debugf("subscribeDataMsgHandler(%v)", msg.MessageID())
-
-		m.handleDataMessage(msg.Payload())
 	})
 	if err != nil {
 		return err
