@@ -127,6 +127,12 @@ func (m *MessageRouter) ConnectClient() error {
 		m.logger.Tracef("connected to broker %v", url)
 	}
 
+	// Publish a throwaway message in case the topic does not exist; this is a
+	// workaround for the Akamai MQTT broker implementation.
+	if err := m.publishData(0, false, []byte{}); err != nil {
+		return err
+	}
+
 	m.sig.emit(SignalClientConnect, true)
 	m.logger.Debugf("emitted signal: \"%v\"", SignalClientConnect)
 	m.logger.Tracef("emitted value: %#v", true)
@@ -226,9 +232,17 @@ func (m *MessageRouter) SubscribeAndRoute() error {
 			}
 		case CommandNameReconnect:
 			m.client.Disconnect(500)
-			if err := m.PublishSubscribeAndRoute(); err != nil {
+			if err := m.ConnectClient(); err != nil {
 				m.logger.Error(err)
 			}
+			if err := m.PublishConnectionStatus(); err != nil {
+				m.logger.Error(err)
+			}
+			go func() {
+				if err := m.SubscribeAndRoute(); err != nil {
+					m.logger.Error(err)
+				}
+			}()
 		}
 	})
 	if err != nil {
@@ -241,27 +255,6 @@ func (m *MessageRouter) SubscribeAndRoute() error {
 		m.handleDataMessage(msg.Payload())
 	})
 	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// PublishSubscribeAndRoute connects to the MQTT client, publishes a
-// connection-status message, subscribes to the control and data topics, and
-// sets up a message handler to route data messages to workers.
-func (m *MessageRouter) PublishSubscribeAndRoute() error {
-	// Publish a throwaway message in case the topic does not exist; this is a
-	// workaround for the Akamai MQTT broker implementation.
-	if err := m.publishData(0, false, []byte{}); err != nil {
-		return err
-	}
-
-	if err := m.PublishConnectionStatus(); err != nil {
-		return err
-	}
-
-	if err := m.SubscribeAndRoute(); err != nil {
 		return err
 	}
 
